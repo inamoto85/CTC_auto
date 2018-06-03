@@ -2,7 +2,7 @@
 
 # This is the main file for CTC_auto
 # CTC_auto is script that converts DICOM files (RP+RD+RS-CT) to a DOSXYZnrc
-# compatible egsphant phantom
+# compatible egsphant phantom 1
 # It is a modified version of CTC_ask as published in:
 # RO Ottosson and CF Behrens. CTC-ask: a new algorithm for conversion of CT
 # numbers to tissue parameters for Monte Carlo dose calculations applying
