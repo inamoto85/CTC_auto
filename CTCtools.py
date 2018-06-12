@@ -14,6 +14,7 @@
 #    permissions and limitations under the License.
 #
 
+from __future__ import print_function
 import glob
 import scipy.io
 import dicom
@@ -24,6 +25,17 @@ from scipy import ndimage, ogrid, mgrid, interpolate
 from skimage import draw
 from scipy.interpolate import InterpolatedUnivariateSpline
 import sys
+
+
+# fix for python 3.x
+try:
+    basestring
+except NameError:
+    basestring = str
+try:
+    unicode
+except NameError:
+    unicode = str
 
 
 class struct:
@@ -92,7 +104,7 @@ def writeContFile(dicomDir, fileName, content):
 def getStructFromMatFile(fileName, attr, level):
     data = struct()
     matfile = scipy.io.loadmat(fileName, squeeze_me=True,
-    struct_as_record=False)
+                               struct_as_record=False)
     if level == 0:
         for field in matfile[attr]._fieldnames:
             val = getattr(matfile[attr], field)
@@ -116,6 +128,20 @@ def getStructFromMatFile(fileName, attr, level):
 
 
 def getDICOMcoords(fileName, cm):
+    """
+    get pixel coordinates from dicom file
+    Parameters:
+    --------------
+    fileName: CT DICOM file to read
+    cm: bool flag, if True, use units in cm,
+    else use units in mm, as is default in DICOM
+
+    Returns
+    --------------
+    tuple: (xCoord, yCoord)
+    xCoord: x coordinates for pixels
+    yCoord: y coordinates for pixels
+    """
     dcm = dicom.read_file(fileName)  # read DICOM file
 
     # get directional cosines
@@ -125,19 +151,23 @@ def getDICOMcoords(fileName, cm):
     # get xCoord
     if abs(xDir[0]) == 1:
         xCoord = getCoord(sum(xDir), float(dcm.ImagePositionPatient[0]),
-        float(dcm.PixelSpacing[0]), dcm.Columns)
+                          float(dcm.PixelSpacing[0]), dcm.Columns)
     else:
         xCoord = getCoord(sum(xDir), float(dcm.ImagePositionPatient[1]),
-        float(dcm.PixelSpacing[1]), dcm.Columns)
+                          float(dcm.PixelSpacing[1]), dcm.Columns)
     xCoord = np.asarray(xCoord)
 
     # get yCoord
     if abs(yDir[1]) == 1:
-        yCoord = getCoord(sum(yDir), float(dcm.ImagePositionPatient[1]),
-        float(dcm.PixelSpacing[1]), dcm.Rows)
+        yCoord = getCoord(sum(yDir),
+                          float(dcm.ImagePositionPatient[1]),
+                          float(dcm.PixelSpacing[1]),
+                          dcm.Rows)
     else:
-        yCoord = getCoord(sum(yDir), float(dcm.ImagePositionPatient[0]),
-        float(dcm.PixelSpacing[0]), dcm.Rows)
+        yCoord = getCoord(sum(yDir),
+                          float(dcm.ImagePositionPatient[0]),
+                          float(dcm.PixelSpacing[0]),
+                          dcm.Rows)
     yCoord = np.asarray(yCoord)
 
     # if cm is 1 convert to cm from DICOM native mm
@@ -149,7 +179,8 @@ def getDICOMcoords(fileName, cm):
 
 
 def getCoord(dircos, position, spacing, elements):
-    coord = np.linspace(position, position + (elements-1) * dircos * spacing, num = elements)
+    coord = np.linspace(position, position + (elements-1) * dircos * spacing,
+                        num=elements)
     return coord
 
 
@@ -204,7 +235,7 @@ def getCTdata(fileName):
     dcm = dicom.read_file(fileName)  # read DICOM file
     ct_slice = np.ndarray.astype(dcm.pixel_array, 'int')
     ct_slice[:] = [x * int(dcm.RescaleSlope) + int(dcm.RescaleIntercept)
-    for x in ct_slice]
+                   for x in ct_slice]
     return ct_slice
 
 
@@ -232,7 +263,7 @@ def deInterpCTmatrix(ct_mtrx, ct_xmesh, ct_ymesh, ct_zmesh, rd_xmesh, rd_ymesh, 
             points[cnt][1] = item
             cnt += 1
 
-    for i in pbar(range (0, len(rd_zmesh))):
+    for i in pbar(range(0, len(rd_zmesh))):
         sliceNr = np.argwhere(np.around(ct_zmesh, decimals=1) ==
         np.around(rd_zmesh[i], decimals=1))[0][0]
         ct_slice = np.reshape(ct_mtrx[sliceNr][:][:].T, -1)
@@ -244,9 +275,9 @@ def deInterpCTmatrix(ct_mtrx, ct_xmesh, ct_ymesh, ct_zmesh, rd_xmesh, rd_ymesh, 
 
 
 def getContour(RSData, zmesh, flip, cm):
-# create and initialize structures
+    # create and initialize structures
     contour = [None] * len(zmesh)
-    
+
     # return None if no ContourSequence exists
     if not hasattr(RSData, 'ContourSequence'):
         return None
@@ -274,7 +305,7 @@ def getContour(RSData, zmesh, flip, cm):
 
         # locate which slice nr it belongs to
         sliceNr = np.argwhere(np.around(zmesh, decimals=1) ==
-        np.around(cont[2][0], decimals=1))[0][0]
+                              np.around(cont[2][0], decimals=1))[0][0]
 
         # the first data set will implicitly belong to a new slice
         if i == 0 or sliceNr != lastSlice:
@@ -282,7 +313,6 @@ def getContour(RSData, zmesh, flip, cm):
         points = cont[:]
         segments.append(points)
         contour[sliceNr] = segments[:]
-
         lastSlice = sliceNr
 
     return contour
@@ -629,7 +659,7 @@ def writeEgsphant(fileName, x, y, z, medium, estepe, media, density, spaceDelimi
         f.write('\n')
 
     # finish of with an emtpy line to satisfy dosxyznrc.mortran
-    f.write('\n')  
+    f.write('\n')
     f.close()  # close file
 
 
@@ -651,21 +681,23 @@ def getFromFile(fileName, switch):
         data = f.readlines()
 
     data = map(str.strip, data)
-
+    # switch modifies the shape of the data
     if switch == 0:
         for elem in data:
             try:
-                myList.append(map(float, elem.split()))
+                myList.append(list(map(float, elem.split())))
             except ValueError:
                 pass
     elif switch == 1:
         il = []
         for elem in data:
             try:
-                map(float, elem.split())
+                # modified to be compatible in py3
+                list(map(float, elem.split()))
                 innerList = copy.deepcopy(il)
                 innerList.append(float(elem.split()[0]))
-                innerList.append(np.asarray(map(float, elem.split()[1:])))
+                innerList.append(np.asarray(list(map(float,
+                                                     elem.split()[1:]))))
                 myList.append(innerList)
             except ValueError:
                 pass
@@ -685,7 +717,7 @@ def getFromFile(fileName, switch):
             try:
                 elems = filter(None, elem.split('\t'))
                 myList.append([elems[2].strip(), elems[0].strip(),
-                float(elems[1].strip())])
+                               float(elems[1].strip())])
             except ValueError:
                 pass
             except IndexError:
@@ -840,8 +872,7 @@ def dropEmpty(sIn):
 
 
 def printnamevol(s):
-    print 'Structure: {0:s} has est volume {1:5d}'.format(s.name, int(np.sum(s.logicMatrix)))
-
+    print('Structure: {0:s} has est volume {1:5d}'.format(s.name, int(np.sum(s.logicMatrix))))
 
 
 def checkSaveTypes(toCheck, myList):
@@ -857,15 +888,16 @@ def dropOutOfExt(sIn, extName, saveTypes):
     ext = [i for i, x in enumerate(sIn) if x.type == extName][0]
     external = sIn[ext]
     for elem in sIn:
-        if not elem.name == external.name and not checkSaveTypes(elem.type, saveTypes):
+        if not elem.name == external.name and not checkSaveTypes(elem.type,
+                                                                 saveTypes):
             # check if it is engulfed
-            #print '{0:s} covered to {2:.2f}% by {1:s}'.format(elem.name, external.name, covered(elem.logicMatrix, external.logicMatrix)*100.) 
+            # print '{0:s} covered to {2:.2f}% by {1:s}'.format(elem.name, external.name, covered(elem.logicMatrix, external.logicMatrix)*100.) 
             if covered(elem.logicMatrix, external.logicMatrix) > .95:
                 sOut.append(elem)
-                #print '{0:s} appended'.format(elem.name)
+                # print '{0:s} appended'.format(elem.name)
             else:
-                print '{0:s} dropped'.format(elem.name)
+                print('{0:s} dropped'.format(elem.name))
         else:
             sOut.append(elem)
-            #print '{0:s} appended'.format(elem.name)
+            # print '{0:s} appended'.format(elem.name)
     return sOut

@@ -13,7 +13,7 @@
 #    not use this file except in compliance with the License. You may
 #    obtain a copy of the License at
 #
-#http://www.osedu.org/licenses/ECL-2.0
+#    http://www.osedu.org/licenses/ECL-2.0
 #
 #    Unless required by applicable law or agreed to in writing,
 #    software distributed under the License is distributed on an "AS IS"
@@ -29,6 +29,7 @@
 # python CTC_auto DICOMdirectory fileName
 #
 
+from __future__ import print_function
 import sys
 import dicom
 import numpy as np
@@ -58,14 +59,14 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
     with open(confFile) as f:
         confCont = f.readlines()
     whatToGet = ['common.RPfilePrefix', 'common.RDfilePrefix',
-        'common.RSfilePrefix', 'common.CTfilePrefix', 'common.DICOMfileEnding',
-        'CTC_auto.fixedMedDens', 'CTC_auto.extName',
-        'CTC_auto.suppName', 'CTC_auto.suppOuter',
-        'CTC_auto.suppInner', 'CTC_auto.densRampName',
-        'CTC_auto.externalRamp', 'CTC_auto.outsideRamp',
-        'CTC_auto.otherwiseRamp', 'CTC_auto.airDens',
-        'CTC_auto.setAir', 'CTC_auto.lowerDens',
-        'CTC_auto.spaceDelimit', 'CTC_auto.relElecFile']
+                 'common.RSfilePrefix', 'common.CTfilePrefix',
+                 'common.DICOMfileEnding', 'CTC_auto.fixedMedDens',
+                 'CTC_auto.extName', 'CTC_auto.suppName', 'CTC_auto.suppOuter',
+                 'CTC_auto.suppInner', 'CTC_auto.densRampName',
+                 'CTC_auto.externalRamp', 'CTC_auto.outsideRamp',
+                 'CTC_auto.otherwiseRamp', 'CTC_auto.airDens',
+                 'CTC_auto.setAir', 'CTC_auto.lowerDens',
+                 'CTC_auto.spaceDelimit', 'CTC_auto.relElecFile']
 
     # get the variables from confFile
     cv = struct()
@@ -88,8 +89,10 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
     with open(CTfile) as f:
         ct = f.readlines()
     ct = map(str.strip, ct)
-    # get x and y coords, just use first file in list as all will have same grid
-    ct_xmesh, ct_ymesh = CTCtools.getDICOMcoords(ct[0], True)  # get DICOMcoords in cm
+    # get x and y coords, just use first file in list
+    # as all will have same grid
+    ct_xmesh, ct_ymesh = CTCtools.getDICOMcoords(ct[0], True)
+    # get DICOMcoords in cm
     # get CT matrix and z coords
     ct_zmesh, ct_mtrx = CTCtools.getCTinfo(ct, True)
 
@@ -378,7 +381,7 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
             indx = [j for j, x in enumerate(addStructType)
             if x == structures[i].type][0]
             rampName = addRampName[indx]
-        print structures[i].name, rampName
+        print(structures[i].name, rampName)
         structures[i].ramp = CTCtools.grabData(rampName, 'materialRamp', 0, 2)
 
     # Build and sort total media list
@@ -454,9 +457,9 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
         cv.spaceDelimit = True
     else:
         cv.spaceDelimit = False
-    print 'Writing egs4phant file'
+    print('Writing egs4phant file')
     CTCtools.writeEgsphant(fileName, rds_xmesh, rds_ymesh, rds_zmesh,
-    medium, estepe, media, density, cv.spaceDelimit)
+                           medium, estepe, media, density, cv.spaceDelimit)
 
 
 # Function chooser
@@ -474,16 +477,16 @@ if __name__ == "__main__":
             with open(confFile) as f:
                 confCont = f.readlines()
             whatToGet = ['common.RPfilePrefix', 'common.RDfilePrefix',
-            'common.RSfilePrefix', 'common.CTfilePrefix',
-            'common.DICOMfileEnding']
+                         'common.RSfilePrefix', 'common.CTfilePrefix',
+                         'common.DICOMfileEnding']
             affix = struct()
             affix = CTCtools.getConfVars(affix, whatToGet, confCont)
             CTCtools.genRPRD(DICOMdir, affix.RPfilePrefix, affix.RDfilePrefix,
-                affix.DICOMfileEnding, fileName)
+                             affix.DICOMfileEnding, fileName)
             CTCtools.genRS(DICOMdir, affix.RSfilePrefix, affix.DICOMfileEnding,
-                fileName)
+                           fileName)
             CTCtools.genCT(DICOMdir, affix.CTfilePrefix, affix.DICOMfileEnding,
-                fileName)
+                           fileName)
             RPRDfile = os.path.sep.join([DICOMdir, 'RPRD.txt'])
             RSfile = os.path.sep.join([DICOMdir, 'RS.txt'])
             CTfile = os.path.sep.join([DICOMdir, 'CT.txt'])
@@ -497,5 +500,6 @@ if __name__ == "__main__":
                 addStructType.append(sys.argv[cnt])
                 addRampName.append(sys.argv[cnt + 1])
                 cnt += 2
-        func_arg[sys.argv[1]](RPRDfile, RSfile, CTfile, fileName, addStructType,
-             addRampName)
+        func_arg[sys.argv[1]](RPRDfile, RSfile, CTfile, fileName,
+                              addStructType,
+                              addRampName)
