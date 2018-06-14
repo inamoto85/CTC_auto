@@ -129,12 +129,12 @@ def getStructFromMatFile(fileName, attr, level):
 
 def getDICOMcoords(fileName, cm):
     """
-    get pixel coordinates from dicom file
+    get pixel coordinates from DICOM file
     Parameters:
     --------------
     fileName: CT DICOM file to read
     cm: bool flag, if True, use units in cm,
-    else use units in mm, as is default in DICOM
+    else use units in mm, as is default in DICOM format
 
     Returns
     --------------
@@ -145,8 +145,8 @@ def getDICOMcoords(fileName, cm):
     dcm = dicom.read_file(fileName)  # read DICOM file
 
     # get directional cosines
-    xDir = map(int, dcm.ImageOrientationPatient[:3])
-    yDir = map(int, dcm.ImageOrientationPatient[3:])
+    xDir = list(map(int, dcm.ImageOrientationPatient[:3]))
+    yDir = list(map(int, dcm.ImageOrientationPatient[3:]))
 
     # get xCoord
     if abs(xDir[0]) == 1:
@@ -185,6 +185,21 @@ def getCoord(dircos, position, spacing, elements):
 
 
 def getDICOMzCoord(fileName, cm):
+    """
+    return DICOM coordinates in Z direction for CT/RP/RD files
+    parameters:
+    -------------
+    filename: DICOM filename either a CT file or a RP/RD file
+    cm: bool flag, if true, convert coordinates into units cm,
+    otherwise preserve the default units mm.
+
+    Returns:
+    -------------
+    zCoord: if RP/RD file returns a list containing z coordinates
+    for all voxels
+            if CT file, returns a single value of
+            corresponding slice
+    """
     dcm = dicom.read_file(fileName)  # read DICOM file
     if dcm.Modality == 'CT':
         zCoord = dcm.ImagePositionPatient[2]
@@ -200,7 +215,27 @@ def getDICOMzCoord(fileName, cm):
 
 
 def getCTinfo(fileList, cm):
+    """
+    Get z coordinates in CT files and ct 3D matrix containing
+    all available CT slices.
+
+    parameters:
+    -----------
+    fileList: list containing all CT files location
+    cm: bool flag, if true, convert coordinates into units cm,
+    otherwise preserve the default units mm.
+
+    returns:
+    -----------
+    tuple containing zCoordArr and ctmtrx
+
+    zCoordArr: index_array: ndarray, float
+               z coordinates in ascending order for all CT files
+    ctmtrx: array, float
+            3D CT matrix for all corresponding CT files
+    """
     # define static variables
+    # why define a default offset? rwang 12-06-2018
     ctOffset = 1000
     zCoord = np.zeros(len(fileList))
 
@@ -221,7 +256,6 @@ def getCTinfo(fileList, cm):
     for i in range(0, len(fileList)):
         ct_slice = getCTdata(fileList[ct_order[i]])
         if i == 0:
-
             ct_mtrx = np.empty((len(zCoord), len(ct_slice), len(ct_slice[0])))
         ct_mtrx[:][:][i] = ct_slice
 
@@ -232,6 +266,16 @@ def getCTinfo(fileList, cm):
 
 
 def getCTdata(fileName):
+    """
+    return file-corresponding CT matrix data
+    Parameters:
+    -----------
+    fileName: `str` input CT filename
+
+    Returns:
+    -----------
+    ct_slice: `numpy.ndarray` CT slice matrix
+    """
     dcm = dicom.read_file(fileName)  # read DICOM file
     ct_slice = np.ndarray.astype(dcm.pixel_array, 'int')
     ct_slice[:] = [x * int(dcm.RescaleSlope) + int(dcm.RescaleIntercept)
@@ -240,8 +284,18 @@ def getCTdata(fileName):
 
 
 def getOrient(fileName):
+    """
+    return orientation arrays of a DICOM file
+    Parameters:
+    -----------
+    fileName: `str` input CT/RP/RD filename
+
+    Returns:
+    -----------
+    list containing cosines for x and y arrows
+    """
     dcm = dicom.read_file(fileName)  # open file
-    return map(int, dcm.ImageOrientationPatient)
+    return list(map(int, dcm.ImageOrientationPatient))
 
 
 def create1dDICOMcoord(start, pix, dim, direction):
@@ -249,11 +303,12 @@ def create1dDICOMcoord(start, pix, dim, direction):
     return np.linspace(start, stop, dim)
 
 
-def deInterpCTmatrix(ct_mtrx, ct_xmesh, ct_ymesh, ct_zmesh, rd_xmesh, rd_ymesh, rd_zmesh, method):
+def deInterpCTmatrix(ct_mtrx, ct_xmesh, ct_ymesh, ct_zmesh, rd_xmesh,
+                     rd_ymesh, rd_zmesh, method):
     pbar = ProgressBar()
     mtrx = np.empty((len(rd_zmesh), len(rd_ymesh), len(rd_xmesh)))
     grid_x, grid_y = np.mgrid[rd_xmesh[0]:rd_xmesh[-1]:len(rd_xmesh) * 1j,
-    rd_ymesh[0]:rd_ymesh[-1]:len(rd_ymesh) * 1j]
+                              rd_ymesh[0]:rd_ymesh[-1]:len(rd_ymesh) * 1j]
 
     points = np.empty((len(ct_xmesh) * len(ct_ymesh), 2))
     cnt = 0
@@ -265,16 +320,29 @@ def deInterpCTmatrix(ct_mtrx, ct_xmesh, ct_ymesh, ct_zmesh, rd_xmesh, rd_ymesh, 
 
     for i in pbar(range(0, len(rd_zmesh))):
         sliceNr = np.argwhere(np.around(ct_zmesh, decimals=1) ==
-        np.around(rd_zmesh[i], decimals=1))[0][0]
+                              np.around(rd_zmesh[i], decimals=1))[0][0]
         ct_slice = np.reshape(ct_mtrx[sliceNr][:][:].T, -1)
 
         mtrx[i][:][:] = interpolate.griddata(points, ct_slice,
-        (grid_x, grid_y), method).T
+                                             (grid_x, grid_y), method).T
 
     return mtrx
 
 
 def getContour(RSData, zmesh, flip, cm):
+    """
+    gets the contour from given ROIcontoursequences
+    Parameters:
+    -----------
+
+    RSData: ROI contour data object, contains:
+            1. ROI Display Color
+            2. Contour Sequence
+            3. Referenced ROI Number
+    zmesh: z sequence
+    flip: decides x, y direction
+    cm: boolean flag indicating distance units between voxels
+    """
     # create and initialize structures
     contour = [None] * len(zmesh)
 
@@ -283,7 +351,7 @@ def getContour(RSData, zmesh, flip, cm):
         return None
 
     for i in range(0, len(RSData.ContourSequence)):
-        rawCont = map(float, RSData.ContourSequence[i].ContourData)
+        rawCont = list(map(float, RSData.ContourSequence[i].ContourData))
         if cm:
             rawCont[:] = [x / 10 for x in rawCont]  # convert to cm
         xCont = np.zeros(len(rawCont) / 3)
@@ -308,6 +376,7 @@ def getContour(RSData, zmesh, flip, cm):
                               np.around(cont[2][0], decimals=1))[0][0]
 
         # the first data set will implicitly belong to a new slice
+        # lastSlice needs to be initialized rwang 14/06/2018
         if i == 0 or sliceNr != lastSlice:
             segments = []
         points = cont[:]
@@ -554,8 +623,8 @@ def convMatToPyth(indata):
         for i in range(0, len(indata.materials)):
             materials.append(indata.materials[i])
             mat_ct_up_bound.append(indata.mat_ct_up_bound[i])
-    materials = map(str, materials)
-    outData.append(map(str.strip, materials))
+    materials = list(map(str, materials))
+    outData.append(list(map(str.strip, materials)))
     outData.append(mat_ct_up_bound)
     return outData
 
@@ -680,7 +749,7 @@ def getFromFile(fileName, switch):
     with open(fileName) as f:
         data = f.readlines()
 
-    data = map(str.strip, data)
+    data = list(map(str.strip, data))
     # switch modifies the shape of the data
     if switch == 0:
         for elem in data:

@@ -88,7 +88,7 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
     # CT
     with open(CTfile) as f:
         ct = f.readlines()
-    ct = map(str.strip, ct)
+    ct = list(map(str.strip, ct))
     # get x and y coords, just use first file in list
     # as all will have same grid
     ct_xmesh, ct_ymesh = CTCtools.getDICOMcoords(ct[0], True)
@@ -114,14 +114,20 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
         rd_xmesh = rd_xmesh[::-1]
     if sum(orientRD[3:]) == -sum(orientCT[3:]):
         rd_ymesh = rd_ymesh[::-1]
-    if len(np.unique([np.all(np.diff(ct_zmesh) > 0), np.all(np.diff(rd_zmesh) > 0)])) > 1:
-        step = np.unique(np.around(np.diff(ct_zmesh), decimals=3))
+    # setting step for z direction, if z incrementing
+    # direction is inverse for CT and RD file.
+    if len(np.unique([np.all(np.diff(ct_zmesh) > 0),
+                      np.all(np.diff(rd_zmesh) > 0)])) > 1:
+        step = np.unique(np.around(np.diff(ct_zmesh),
+                                   decimals=3))
         if len(step) == 1:
             step = float(step)
         else:
             step = float(np.average(step))
-        rd_zmesh = CTCtools.create1dDICOMcoord(rd_zmesh[0], step,
-        len(rd_zmesh), -1)
+        rd_zmesh = CTCtools.create1dDICOMcoord(rd_zmesh[0],
+                                               step,
+                                               len(rd_zmesh),
+                                               -1)
         rd_zmesh = rd_zmesh[::-1]
     '''
     try:
@@ -175,20 +181,26 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
     with open(RSfile) as f:
         rs = f.readline().strip()
     RS = dicom.read_file(rs)  # open file
-    # replace empty strucutre types with specified string
+    # replace empty strucutre types with specified replace type
+    # differentiate default type and replace type? rwang 14/06/2018
     for i in range(0, len(RS.RTROIObservationsSequence)):
         if len(RS.RTROIObservationsSequence[i].RTROIInterpretedType) == 0:
             RS.RTROIObservationsSequence[i].RTROIInterpretedType = replaceType
         try:
-            replaceList.index(RS.RTROIObservationsSequence[i].RTROIInterpretedType)
+            # If replaceList contains the InterpretedType, replace it by the
+            # designated replace type
+            replaceList.index(RS.RTROIObservationsSequence[i].
+                              RTROIInterpretedType)
             RS.RTROIObservationsSequence[i].RTROIInterpretedType = replaceType
         except ValueError:
             pass
 
     # start reading RS struct types
+    # counting all kinds of ROI Interpreted Types
     allTypesFull = []
     for i in range(0, len(RS.RTROIObservationsSequence)):
-        allTypesFull.append(RS.RTROIObservationsSequence[i].RTROIInterpretedType)
+        allTypesFull.append(RS.RTROIObservationsSequence[i].
+                            RTROIInterpretedType)
     allTypes = list(set(allTypesFull))
     # Check for support structures
     try:
@@ -205,14 +217,17 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
         # get indices of support structures
         suppNr = [i for i, x in enumerate(allTypesFull) if x == cv.suppName]
         # get the ref ROI number(s)
+        # refROIs ref ROI number of support structures
         for elem in suppNr:
             refROIs.append(int(RS.ROIContourSequence[elem].ReferencedROINumber))
         # find the corresponding ContourSequence
         for elem in refROIs:
-            refContSeq.append(CTCtools.getCorrContSeq(RS.ROIContourSequence, elem))
+            refContSeq.append(CTCtools.getCorrContSeq(RS.ROIContourSequence,
+                                                      elem))
         # get the extreme of the support structures
         for elem in refContSeq:
-            suppDim = CTCtools.getExtremeOfContour(CTCtools.getContour(RS.ROIContourSequence[elem], ct_zmesh, abs(orientCT[1]), True), suppDim)
+            suppDim = CTCtools.getExtremeOfContour(CTCtools.getContour(RS.ROIContourSequence[elem], ct_zmesh, abs(orientCT[1]), True),
+                                                   suppDim)
         # extend rd_*mesh to encompass support structures
         rds_xmesh = CTCtools.extendMesh(rd_xmesh, suppDim.X)
         rds_ymesh = CTCtools.extendMesh(rd_ymesh, suppDim.Y)
@@ -225,7 +240,9 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
         cts_zmesh = CTCtools.extendMesh(ct_zmesh, suppDim.Z)
         # pad ct using map_coordinates if cts != ct
         if ct_mtrx.shape != (len(cts_zmesh), len(cts_ymesh), len(cts_xmesh)):
-            ct_mtrx = CTCtools.map_coordinates(ct_mtrx, ct_xmesh, ct_ymesh, ct_zmesh, cts_xmesh, cts_ymesh, cts_zmesh, 0)
+            ct_mtrx = CTCtools.map_coordinates(ct_mtrx, ct_xmesh, ct_ymesh,
+                                               ct_zmesh, cts_xmesh, cts_ymesh,
+                                               cts_zmesh, 0)
 
     # Deinterpolate CT data onto dose grid
     # check if rds_zmesh is beyond cts_zmesh, if so eliminate slices
