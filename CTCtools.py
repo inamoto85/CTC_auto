@@ -20,11 +20,10 @@ import scipy.io
 import dicom
 import numpy as np
 import copy
-from progressbar import ProgressBar
+# from progressbar import ProgressBar
 from scipy import ndimage, ogrid, mgrid, interpolate
 from skimage import draw
 from scipy.interpolate import InterpolatedUnivariateSpline
-import sys
 
 
 # fix for python 3.x
@@ -235,7 +234,9 @@ def getCTinfo(fileList, cm):
             3D CT matrix for all corresponding CT files
     """
     # define static variables
-    # why define a default offset? rwang 12-06-2018
+    # How to select a default offset?
+    # offset +1000 is to set the default HU value of air -950/-1000
+    # near 0, reason? rwang 22-06-2018
     ctOffset = 1000
     zCoord = np.zeros(len(fileList))
 
@@ -305,7 +306,7 @@ def create1dDICOMcoord(start, pix, dim, direction):
 
 def deInterpCTmatrix(ct_mtrx, ct_xmesh, ct_ymesh, ct_zmesh, rd_xmesh,
                      rd_ymesh, rd_zmesh, method):
-    pbar = ProgressBar()
+    # pbar = ProgressBar()
     mtrx = np.empty((len(rd_zmesh), len(rd_ymesh), len(rd_xmesh)))
     grid_x, grid_y = np.mgrid[rd_xmesh[0]:rd_xmesh[-1]:len(rd_xmesh) * 1j,
                               rd_ymesh[0]:rd_ymesh[-1]:len(rd_ymesh) * 1j]
@@ -318,7 +319,7 @@ def deInterpCTmatrix(ct_mtrx, ct_xmesh, ct_ymesh, ct_zmesh, rd_xmesh,
             points[cnt][1] = item
             cnt += 1
 
-    for i in pbar(range(0, len(rd_zmesh))):
+    for i in range(0, len(rd_zmesh)):
         sliceNr = np.argwhere(np.around(ct_zmesh, decimals=1) ==
                               np.around(rd_zmesh[i], decimals=1))[0][0]
         ct_slice = np.reshape(ct_mtrx[sliceNr][:][:].T, -1)
@@ -339,24 +340,24 @@ def getContour(RSData, zmesh, flip, cm):
             1. ROI Display Color
             2. Contour Sequence
             3. Referenced ROI Number
-    zmesh: z sequence
+    zmesh: z sequence 1d array
     flip: decides x, y direction
     cm: boolean flag indicating distance units between voxels
     """
     # create and initialize structures
     contour = [None] * len(zmesh)
-
+    # lastSlice initialization
+    lastSlice = -1
     # return None if no ContourSequence exists
     if not hasattr(RSData, 'ContourSequence'):
         return None
-
     for i in range(0, len(RSData.ContourSequence)):
         rawCont = list(map(float, RSData.ContourSequence[i].ContourData))
         if cm:
             rawCont[:] = [x / 10 for x in rawCont]  # convert to cm
-        xCont = np.zeros(len(rawCont) / 3)
-        yCont = np.zeros(len(rawCont) / 3)
-        zCont = np.zeros(len(rawCont) / 3)
+        xCont = np.zeros(int(len(rawCont) / 3))
+        yCont = np.zeros(int(len(rawCont) / 3))
+        zCont = np.zeros(int(len(rawCont) / 3))
         for j in range(1, len(xCont) + 1):
             xCont[j - 1] = rawCont[3 * j - 3]
             yCont[j - 1] = rawCont[3 * j - 2]
@@ -376,7 +377,6 @@ def getContour(RSData, zmesh, flip, cm):
                               np.around(cont[2][0], decimals=1))[0][0]
 
         # the first data set will implicitly belong to a new slice
-        # lastSlice needs to be initialized rwang 14/06/2018
         if i == 0 or sliceNr != lastSlice:
             segments = []
         points = cont[:]
@@ -463,12 +463,13 @@ def interpStructToDose(contour, rd_x, rd_y, rd_z, ct_x, ct_y, ct_z):
     yL = np.arange(len(ct_y))
 
     # iterate through contour to generate a mask for each slice
-    # note; there may be empty slices as well as slices with multiple segments
-    pbar = ProgressBar()
-    for j in pbar(range(0, len(contour))):
+    # note: there may be empty slices as well as slices with multiple segments
+    # pbar = ProgressBar()
+    for j in range(0, len(contour)):
         if contour[j] is not None:  # skip empty slices
             sliceNr = np.argwhere(np.around(ct_z, decimals=1) ==
-            np.around(contour[j][0][2][0], decimals=1))[0][0]
+                                  np.around(contour[j][0][2][0],
+                                            decimals=1))[0][0]
             for i in range(0, len(contour[j])):
                 # take care of unbound contours
                 points_x = copy.deepcopy(contour[j][i][0][:])  # get x-points
@@ -482,12 +483,13 @@ def interpStructToDose(contour, rd_x, rd_y, rd_z, ct_x, ct_y, ct_z):
                 points_y = np.interp(points_y, ct_y, yL)
                 # assign mask based on polygons
                 [rr, cc] = draw.polygon(np.asarray(points_y),
-                np.asarray(points_x), (len(ct_y), len(ct_x)))
+                                        np.asarray(points_x),
+                                        (len(ct_y), len(ct_x)))
                 tempMask = np.zeros((len(ct_y), len(ct_x)))
                 tempMask[rr, cc] = -1
                 # add for the current slice
                 maskM[sliceNr][:][:] = np.add(maskM[sliceNr][:][:],
-                tempMask[:][:])
+                                              tempMask[:][:])
                 maskM[sliceNr][:][:] = np.abs(maskM[sliceNr][:][:])
 
     del tempMask
@@ -534,13 +536,31 @@ def getIndx(a, b, margin):
 
 
 def map_coordinates(mtrx, ct_x, ct_y, ct_z, rd_x, rd_y, rd_z, order):
+    """
+    Interpolate the mtrx with (ct_z, ct_y, ct_x) shape to
+    (rd_z, rd_y, rd_x) shape mtrxOut
+    Parameters:
+    -----------
+    mtrx: input matrix to be interpolated
+    ct_x:
+    ct_y:
+    ct_z:
+    rd_x:
+    rd_y:
+    rd_z:
+    order: interplation order
+
+    Output:
+    ----------
+    mtrxOut: mtrxOut in shape(rd_z, rd_y, rd_x)
+    """
     mtrxOut = np.zeros((len(rd_z), len(rd_y), len(rd_x)))  # preallocate
 
     # create sparse grids
     xct, yct = ogrid[min(ct_x):max(ct_x):len(ct_x) * 1j,
-    min(ct_y):max(ct_y):len(ct_y) * 1j]
+                     min(ct_y):max(ct_y):len(ct_y) * 1j]
 
-    # interpolate coord arrays in cm to voxel nr
+    # interpolate coord arrays in cm to voxel number
     xL = np.linspace(0, len(ct_x) - 1, len(ct_x))
     yL = np.linspace(0, len(ct_y) - 1, len(ct_y))
     extrapolatorX = InterpolatedUnivariateSpline(ct_x, xL, k=1)
@@ -551,15 +571,18 @@ def map_coordinates(mtrx, ct_x, ct_y, ct_z, rd_x, rd_y, rd_z, order):
     xrd, yrd = mgrid[min(x):max(x):len(x) * 1j, min(y):max(y):len(y) * 1j]
     coords = np.array([yrd, xrd])
 
-    pbar = ProgressBar()
+    # pbar = ProgressBar()
     # map coordinates slice by slice
     cnt = 0
-    for i in pbar(range (0, len(rd_z))):
+    for i in range(0, len(rd_z)):
         try:
             sliceNr = np.argwhere(np.around(ct_z,
-            decimals=1) == np.around(rd_z[i], decimals=1))[0][0]
+                                            decimals=1)
+                                  == np.around(rd_z[i],
+                                               decimals=1))[0][0]
             ct_slice = ndimage.map_coordinates(mtrx[sliceNr][:][:],
-            coords, order=order).T
+                                               coords,
+                                               order=order).T
         except IndexError:
             ct_slice = np.zeros((len(rd_y), len(rd_x)))
         mtrxOut[cnt][:][:] = ct_slice[:][:]
@@ -573,12 +596,15 @@ def computeDensity(mtrx, ramp):
     mtrx = np.nan_to_num(mtrx)
     densMtrx = np.zeros(mtrx.shape)
     # compute density for all but last 'segment'
+    # This is only valid for 2 segment density tables
+    # rwang 21/06/2018
     for i in range(0, len(ramp) - 1):
         densMtrx = np.where(mtrx <= ramp[i][0],
-        mtrx * ramp[i][1][1] + ramp[i][1][0], densMtrx)
+                            mtrx * ramp[i][1][1] + ramp[i][1][0],
+                            densMtrx)
     # compute density for last 'segment'
     densMtrx = np.where(mtrx > ramp[-2][0], mtrx * ramp[-1][1][1] +
-    ramp[-1][1][0], densMtrx)
+                        ramp[-1][1][0], densMtrx)
     # remove negatives
     densMtrx = np.where(densMtrx < 0., 0., densMtrx)
     return densMtrx
@@ -663,7 +689,8 @@ def buildGlobalMediaList(structures):
     return medNr, medium
 
 
-def writeEgsphant(fileName, x, y, z, medium, estepe, media, density, spaceDelimit):
+def writeEgsphant(fileName, x, y, z, medium, estepe,
+                  media, density, spaceDelimit):
     halfThick = False
     xb = createBoundGrid(x)
     yb = createBoundGrid(y)
@@ -693,9 +720,9 @@ def writeEgsphant(fileName, x, y, z, medium, estepe, media, density, spaceDelimi
     writeBound(f, zb, 6)
     f.write('\n')
     # write media matrix
-    pbar = ProgressBar()
+    # pbar = ProgressBar()
     if spaceDelimit:
-        for i in pbar(range(0, len(z))):
+        for i in range(0, len(z)):
             for j in range(0, len(y)):
                 for k in range(0, len(x)):
                     if not halfThick:
@@ -707,7 +734,7 @@ def writeEgsphant(fileName, x, y, z, medium, estepe, media, density, spaceDelimi
                 f.write('\n')
             f.write('\n')
     else:
-        for i in pbar(range(0, len(z))):
+        for i in range(0, len(z)):
             for j in range(0, len(y)):
                 for k in range(0, len(x)):
                     if not halfThick:
@@ -784,7 +811,8 @@ def getFromFile(fileName, switch):
     elif switch == 3:
         for elem in data:
             try:
-                elems = filter(None, elem.split('\t'))
+                # python3 compatibility
+                elems = list(filter(None, elem.split('\t')))
                 myList.append([elems[2].strip(), elems[0].strip(),
                                float(elems[1].strip())])
             except ValueError:
@@ -817,7 +845,7 @@ def getPythonicList(data, attr):
     for i in range(0, len(lookFor)):
         tempList.append(getattr(data, lookFor[i]))
 
-    # reaarrange
+    # rearrange
     for i in range(0, len(tempList[0])):
         innerList = copy.deepcopy(il)
         try:
@@ -834,7 +862,7 @@ def flatten(seq, container=None):
     if container is None:
         container = []
     for s in seq:
-        if hasattr(s, '__iter__'):
+        if hasattr(s, '__iter__') and not isinstance(s, basestring):
             flatten(s, container)
         else:
             container.append(s)
@@ -849,7 +877,6 @@ def getHUfromDens(dens, densRamp):
         if myHU <= densRamp[cnt][0]:
             break
         cnt += 1
-
     return myHU
 
 
@@ -857,11 +884,24 @@ def checkEngulf(child, parent):
     if isEngulfed(parent.logicMatrix, child.logicMatrix):
         return parent, child
     else:
-        #print '{0:s} is engulfed by {1:s}, switching order'.format(child.name, parent.name)
+        # print '{0:s} is engulfed by {1:s},
+        # switching order'.format(child.name, parent.name)
         return child, parent
 
 
 def isEngulfed(A, B):
+    """
+    check if all positive points in A
+    is also positive in B, so that A is engulfed by B.
+    Parameters:
+    -----------
+    A: logical Matrix, numpy.array
+    B: logical Matrix, numpy.array
+
+    Output:
+    -----------
+    check:  True if A is inside B, else False
+    """
     A = np.reshape(A, -1)
     B = np.reshape(B, -1)
     # return True if all points in A exists in B
@@ -904,31 +944,39 @@ def sortStructures(sIn, order):
 
 
 def belongToOne(structures, extName):
+    """
+    make sure that one voxel belongs only to one structure
+    """
     for i in range(0, len(structures) - 1):
-        #print structures[i].name, '\n----------------'
+        # print structures[i].name, '\n----------------'
         for j in range(i + 1, len(structures)):
-            #printnamevol(structures[i])
-            #printnamevol(structures[j])
+            # printnamevol(structures[i])
+            # printnamevol(structures[j])
             parent = copy.deepcopy(structures[i])
             child = copy.deepcopy(structures[j])
             if parent.type == extName or child.type == extName or parent.name == 'OUTSIDE':
-                 parent, child = checkEngulf(child, parent)
+                parent, child = checkEngulf(child, parent)
             indx = []
             indx = np.where(parent.logicMatrix == child.logicMatrix)
             numPts = []
             numPts = np.where(parent.logicMatrix[indx] == 1)
             numPts = np.asarray(numPts)
             if len(np.ravel(numPts)) > 0:
-                child.logicMatrix = np.where(parent.logicMatrix == child.logicMatrix, 0 , child.logicMatrix)
-                #print 'removing {2:5d} mutual points in {1:s} and {0:s} from {0:s}'.format(child.name, parent.name, len(np.ravel(numPts)))
+                # removing intersecting points in 2 structures
+                # let it belong to only the former/smaller structures
+                child.logicMatrix = np.where(parent.logicMatrix == child.logicMatrix,
+                                             0,
+                                             child.logicMatrix)
+                # print 'removing {2:5d} mutual points in {1:s} and {0:s} from
+                # {0:s}'.format(child.name, parent.name, len(np.ravel(numPts)))
                 if parent.name == structures[i].name:
                     structures[i] = copy.deepcopy(parent)
                     structures[j] = copy.deepcopy(child)
                 else:
                     structures[j] = copy.deepcopy(parent)
                     structures[i] = copy.deepcopy(child)
-            #printnamevol(structures[i])
-            #printnamevol(structures[j])
+            # printnamevol(structures[i])
+            # printnamevol(structures[j])
     return structures
 
 
@@ -960,7 +1008,7 @@ def dropOutOfExt(sIn, extName, saveTypes):
         if not elem.name == external.name and not checkSaveTypes(elem.type,
                                                                  saveTypes):
             # check if it is engulfed
-            # print '{0:s} covered to {2:.2f}% by {1:s}'.format(elem.name, external.name, covered(elem.logicMatrix, external.logicMatrix)*100.) 
+            # print '{0:s} covered to {2:.2f}% by {1:s}'.format(elem.name, external.name, covered(elem.logicMatrix, external.logicMatrix)*100.)
             if covered(elem.logicMatrix, external.logicMatrix) > .95:
                 sOut.append(elem)
                 # print '{0:s} appended'.format(elem.name)

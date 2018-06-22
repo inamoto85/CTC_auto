@@ -4,7 +4,7 @@ A python module that converts DICOM CT data to voxalized phantom for the EGSnrc 
 
 As of version 0.4.0 CTC_auto includes auxilary files needed to run. The auxilary files are site specific, thus the included generic files should only be used as references with regards to structure.
 
-Below is a short description of each auxilary file
+Below is a short description of each auxiliary file
 
 ctc_auto.conf
   main configuration files, which is read at run time. The file is read and each requested line is split in variable name and value by white space.

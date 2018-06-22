@@ -159,12 +159,15 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
 
     # write doseGrid
     f = open(''.join([fileName, '.doseGrid']), 'w')
-    f.write('{0:12.8f} {1:12.8f} {2:d}\n'.format(rd_xmesh[0], rd_xmesh[-1],
-    len(rd_xmesh)))
-    f.write('{0:12.8f} {1:12.8f} {2:d}\n'.format(rd_ymesh[0], rd_ymesh[-1],
-     len(rd_ymesh)))
-    f.write('{0:12.8f} {1:12.8f} {2:d}\n'.format(rd_zmesh[0], rd_zmesh[-1],
-    len(rd_zmesh)))
+    f.write('{0:12.8f} {1:12.8f} {2:d}\n'.format(rd_xmesh[0],
+                                                 rd_xmesh[-1],
+                                                 len(rd_xmesh)))
+    f.write('{0:12.8f} {1:12.8f} {2:d}\n'.format(rd_ymesh[0],
+                                                 rd_ymesh[-1],
+                                                 len(rd_ymesh)))
+    f.write('{0:12.8f} {1:12.8f} {2:d}\n'.format(rd_zmesh[0],
+                                                 rd_zmesh[-1],
+                                                 len(rd_zmesh)))
     f.close()
 
     cts_xmesh = ct_xmesh[:]
@@ -225,8 +228,12 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
             refContSeq.append(CTCtools.getCorrContSeq(RS.ROIContourSequence,
                                                       elem))
         # get the extreme of the support structures
+        # calculating maximum extremes for multiple structures
         for elem in refContSeq:
-            suppDim = CTCtools.getExtremeOfContour(CTCtools.getContour(RS.ROIContourSequence[elem], ct_zmesh, abs(orientCT[1]), True),
+            suppDim = CTCtools.getExtremeOfContour(CTCtools.getContour(RS.ROIContourSequence[elem],
+                                                                       ct_zmesh,
+                                                                       abs(orientCT[1]),
+                                                                       True),
                                                    suppDim)
         # extend rd_*mesh to encompass support structures
         rds_xmesh = CTCtools.extendMesh(rd_xmesh, suppDim.X)
@@ -246,15 +253,18 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
 
     # Deinterpolate CT data onto dose grid
     # check if rds_zmesh is beyond cts_zmesh, if so eliminate slices
-    rds_zmesh = np.intersect1d(np.around(rds_zmesh, decimals=3), np.around(cts_zmesh, decimals=3), assume_unique=True)
+    rds_zmesh = np.intersect1d(np.around(rds_zmesh, decimals=3),
+                               np.around(cts_zmesh, decimals=3),
+                               assume_unique=True)
     # density matrix is computed using cubic interpolation
     dens_mtrx = CTCtools.map_coordinates(ct_mtrx, cts_xmesh, cts_ymesh,
-    cts_zmesh, rds_xmesh, rds_ymesh, rds_zmesh, 3)
-    #ct_mtrx = CTCtools.map_coordinates(ct_mtrx, cts_xmesh, cts_ymesh,
-    #cts_zmesh, rds_xmesh, rds_ymesh, rds_zmesh, 0)
+                                         cts_zmesh, rds_xmesh, rds_ymesh,
+                                         rds_zmesh, 3)
+    # ct_mtrx = map_coordinates(ct_mtrx, cts_xmesh, cts_ymesh,
+    # cts_zmesh, rds_xmesh, rds_ymesh, rds_zmesh, 0)
     # change: use cubic interpolation also for material
-    #ct_mtrx = CTCtools.map_coordinates(ct_mtrx, cts_xmesh, cts_ymesh,
-    #cts_zmesh, #rds_xmesh, rds_ymesh, rds_zmesh, 3)
+    # ct_mtrx = map_coordinates(ct_mtrx, cts_xmesh, cts_ymesh,
+    # cts_zmesh, #rds_xmesh, rds_ymesh, rds_zmesh, 3)
     ct_mtrx = copy.deepcopy(dens_mtrx)
     # set nans to 0
     dens_mtrx = np.nan_to_num(dens_mtrx)
@@ -262,25 +272,26 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
 
     # Locate external contour
     extNr = [i for i, x in enumerate(allTypesFull)
-    if x.startswith(cv.extName)][0]
+             if x.startswith(cv.extName)][0]
     refROIs.append(int(RS.ROIContourSequence[extNr].ReferencedROINumber))
     refContSeq.append(CTCtools.getCorrContSeq(RS.ROIContourSequence,
-    refROIs[-1]))
+                                              refROIs[-1]))
 
     # Check if additional structure types were requested
     if len(addStructType) > 0:
         for i in range(0, len(addStructType)):
             addNr = [j for j, x in enumerate(allTypesFull)
-            if x == addStructType[i]]
+                     if x == addStructType[i]]
             for j in range(0, len(addNr)):
                 refROIs.append(int(RS.ROIContourSequence[addNr[j]].ReferencedROINumber))
-                refContSeq.append(CTCtools.getCorrContSeq(RS.ROIContourSequence, refROIs[-1]))
+                refContSeq.append(CTCtools.getCorrContSeq(RS.ROIContourSequence,
+                                                          refROIs[-1]))
 
     # Correlate between ROIContourSequence and RTROIObservationsSequence
     refObsSeq = []
     for elem in refROIs:
         refObsSeq.append(CTCtools.getCorrContSeq(RS.RTROIObservationsSequence,
-        elem))
+                                                 elem))
 
     # create and init structures
     structures = []
@@ -332,7 +343,9 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
 
     for elem in refContSeq:
         # get contour
-        structures[cnt].contour = CTCtools.getContour(RS.ROIContourSequence[elem], ct_zmesh, abs(orientCT[1]), True)
+        structures[cnt].contour = CTCtools.getContour(RS.ROIContourSequence[elem],
+                                                      ct_zmesh,
+                                                      abs(orientCT[1]), True)
         # deInterpolate contour onto dose grid and generate boolean matrix
         if structures[cnt].contour:
             structures[cnt].logicMatrix = CTCtools.interpStructToDose(structures[cnt].contour, rds_xmesh, rds_ymesh, rds_zmesh, cts_xmesh, cts_ymesh, cts_zmesh)
@@ -343,9 +356,8 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
     # outside
     out = [i for i, x in enumerate(names) if 'OUTSIDE' in x][0]
     structures[out].logicMatrix = np.ones(structures[0].logicMatrix.shape)
-    
     # drop empty structures (due to being too small)
-    structures = CTCtools.dropEmpty(structures)  
+    structures = CTCtools.dropEmpty(structures)
 
     # drop structures that are not engulfed by external save dedicated types
     saveTypes = ['OUTSIDE', cv.suppName, 'BOLUS']
@@ -358,13 +370,14 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
             structures[cnt].logicMatrix = np.zeros(structures[cnt].logicMatrix.shape).astype(int)
             structures[cnt].logicMatrix[indx] = 1
             break
-
     # make sure that each voxel only belongs to one structure
     if supportStructures:
         # remove suppInner from suppOuter
         inner = [i for i, x in enumerate(names) if cv.suppInner in x][0]
         outer = [i for i, x in enumerate(names) if cv.suppOuter in x][0]
-        structures[outer].logicMatrix = np.where(structures[inner].logicMatrix == 1, 0, structures[outer].logicMatrix)
+        structures[outer].logicMatrix = np.where(structures[inner].logicMatrix == 1,
+                                                 0,
+                                                 structures[outer].logicMatrix)
     sortOrder = [cv.suppName, 'OUTSIDE', cv.extName, 'CTV', True]
     structures = CTCtools.sortStructures(structures, sortOrder)  # sort
     # belong to one
@@ -374,10 +387,15 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
     # perform HU corrections
     if cv.setAir.lower() == 'y':
         out = [i for i, x in enumerate(structures) if 'OUTSIDE' in x.name][0]
-        # assumption: the density of air is below the breakpoint in the bilinear HU-dense curve
+        # assumption: the density of air is below the breakpoint in the
+        # bilinear HU-dense curve
         airHU = (cv.airDens - densRamp[0][1][0]) / densRamp[0][1][1]
-        ct_mtrx = np.where(structures[out].logicMatrix == 1, airHU, ct_mtrx)
-        dens_mtrx = np.where(structures[out].logicMatrix == 1, airHU, dens_mtrx)
+        ct_mtrx = np.where(structures[out].logicMatrix == 1,
+                           airHU,
+                           ct_mtrx)
+        dens_mtrx = np.where(structures[out].logicMatrix == 1,
+                             airHU,
+                             dens_mtrx)
 
     # compute density matrix
     density = CTCtools.computeDensity(dens_mtrx, densRamp)
@@ -396,13 +414,13 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
         else:
             # find correct rampName
             indx = [j for j, x in enumerate(addStructType)
-            if x == structures[i].type][0]
+                    if x == structures[i].type][0]
             rampName = addRampName[indx]
         print(structures[i].name, rampName)
         structures[i].ramp = CTCtools.grabData(rampName, 'materialRamp', 0, 2)
-
     # Build and sort total media list
     medNr, medium = CTCtools.buildGlobalMediaList(structures)
+    import pdb; pdb.set_trace()
 
     # compute media matrix
     media = CTCtools.computeMedia(ct_mtrx, structures, medium, medNr)
@@ -421,16 +439,16 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
                 try:
                     medIndx = medium.index(relElec.media[rIndex])
                     media = np.where(struc.logicMatrix == 1, medNr[medIndx],
-                    media)
+                                     media)
                     density = np.where(struc.logicMatrix == 1,
-                    relElec.physDens[rIndex], density)
+                                       relElec.physDens[rIndex], density)
                 except ValueError:  # add if not in list
                     medium.append(relElec.media[rIndex])
                     medNr.append(max(medNr) + 1)
                     media = np.where(struc.logicMatrix == 1, max(medNr),
-                    media)
+                                     media)
                     density = np.where(struc.logicMatrix == 1,
-                    relElec.physDens[rIndex], density)
+                                       relElec.physDens[rIndex], density)
             except ValueError:
                 pass
 
@@ -446,7 +464,7 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
                 try:
                     medIndx = medium.index(fixedMedia)
                     density = np.where(media == medNr[medIndx],
-                    fixedDensity, density)
+                                       fixedDensity, density)
                 except ValueError:
                     pass
             except ValueError:
@@ -454,7 +472,8 @@ def main(RPRDfile, RSfile, CTfile, fileName, addStructType=[], addRampName=[]):
             except IndexError:
                 pass
 
-    # rotate phantom and interchange rds_mesh with rds_ymesh if the orientation calls for it
+    # rotate phantom and interchange rds_mesh with rds_ymesh
+    # if the orientation calls for it
     if orientCT[0] == 0:
         density = density[:, :, ::-1]
         media = media[:, :, ::-1]
